@@ -1,7 +1,7 @@
 ---
 title: "LAGOS Spatial Analysis"
-author: "Matthew Ross"
-date: "9/11/2019"
+author: "Bri Rick"
+date: "2/24/2022"
 output: html_document
 editor_options: 
   chunk_output_type: console
@@ -10,11 +10,14 @@ editor_options:
 
 
 ```{r setup, include=FALSE}
+knitr::opts_chunk$set(warning = FALSE, message = FALSE) 
+
 library(tidyverse) # Tidy packages
 library(sf) #Spatial package that can read and create shapefiles 
 library(mapview) #Interactive maps
 library(LAGOSNE) #Lots and lots of clean lake data
 library(USAboundaries) #USA states and counties
+mapviewOptions(fgb = FALSE)
 ```
 
 
@@ -28,7 +31,7 @@ library(USAboundaries) #USA states and counties
 
 ```{r data-read}
 # #Lagos download script
-LAGOSNE::lagosne_get(dest_folder = LAGOSNE:::lagos_path())
+#LAGOSNE::lagosne_get(dest_folder = LAGOSNE:::lagos_path())
 
 
 #Load in lagos
@@ -36,8 +39,6 @@ lagos <- lagosne_load()
 
 #Grab the lake centroid info
 lake_centers <- lagos$locus
-
-
 
 ```
 
@@ -65,7 +66,7 @@ subset_spatial <- spatial_lakes %>%
 subset_baser <- spatial_lakes[1:100,]
 
 #Dynamic mapviewer
-mapview(subset_spatial)
+mapview(subset_spatial, map.types = c("Esri.WorldImagery", "OpenStreetMap.DE"))
 
 ```
 
@@ -82,13 +83,14 @@ minnesota <- states %>%
   st_transform(2163)
 
 #Subset lakes based on spatial position
-minnesota_lakes <- spatial_lakes[minnesota,]
+minnesota_lakes <- spatial_lakes[minnesota,] %>% 
+  mutate(state = "Minnesota")
 
 #Plotting the first 1000 lakes
 minnesota_lakes %>%
   arrange(-lake_area_ha) %>%
     slice(1:1000) %>%
-  mapview(.,zcol = 'lake_area_ha')
+  mapview(.,zcol = 'lake_area_ha', map.types = c("Esri.WorldImagery", "OpenStreetMap.DE"))
 ```
 
 
@@ -99,41 +101,69 @@ minnesota_lakes %>%
 ## 1) Show a map outline of Iowa and Illinois (similar to Minnesota map upstream)
 
 ```{r}
+#Subset states to just include Iowa and Illinois
+IowaIllinois <- states %>% 
+  filter(name %in% c("Iowa", "Illinois")) %>% 
+  st_transform(2163)
 
-
-
+#View outlines of Iowa and Illinois on the map
+mapview(IowaIllinois, map.types = c("Esri.WorldImagery", "OpenStreetMap.DE"))
 ```
 
 
 
-## 2) Subset LAGOS data to these sites, how many sites are in Illinois and Iowa
-combined? How does this compare to Minnesota?
+## 2) Subset LAGOS data to these sites, how many sites are in Illinois and Iowa combined? How does this compare to Minnesota?
+
+There are 29,038 lakes located within Minnesota, whereas there are 16,466 lakes located in both Illinois and Iowa. Minnesota has almost 13,000 more lakes than the two states combined. 
 
 ```{r}
+#Subset the lakes dataset by those located in Iowa and Illinois
+IAIL_lakes <- spatial_lakes[IowaIllinois,]
 
+#length(unique(IAIL_lakes$lagoslakeid))
 ```
 
 
 ## 3) What is the distribution of lake size in Iowa vs. Minnesota?
 
-- Here I want to see a histogram plot with lake size on x-axis and frequency on 
-y axis (check out geom_histogram)
+Minnesota has a much larger distribution of lakes than Iowa, meaning there are many more lakes, and more larger lakes than are present in Iowa. Otherwise they have a similar distribution with a distribution skewed toward small lakes.
 
 ```{r}
+iowa <- states %>% 
+  filter(name == "Iowa") %>% 
+  st_transform(2163)
 
+#Spatially subset lakes located in Iowa
+iowa_lakes <- spatial_lakes[iowa,] %>% 
+  mutate(state = "Iowa")
 
+#Bind together MN and IA lake datasets
+MNIAlakes <- rbind(minnesota_lakes, iowa_lakes)
+
+#Plot a histogram of lake areas for both MN and IA
+ggplot(MNIAlakes) +
+  geom_histogram(aes(x = lake_area_ha, fill = state), alpha = 0.8, bins = 50, color = "black", show.legend = FALSE) +
+  scale_x_log10() +
+  theme_bw()+
+  facet_grid(~state) +
+  xlab("Lake area (Ha)")+
+  ylab("Number of lakes")
 ```
 
 
-## 4) Make an interactive plot of lakes in Iowa and Illinois and color them
-by lake area in hectares
+## 4) Make an interactive plot of lakes in Iowa and Illinois and color them by lake area in hectares
 
 ```{r}
+#Subset to view only 1000 lakes to make them easier to see
+subset_IAIL <- IAIL_lakes %>%
+  arrange(-lake_area_ha) %>%
+  slice(1:1000) 
 
+#Visualize subset of lakes on map
+mapview(subset_IAIL, zcol = "lake_area_ha", map.types = c("Esri.WorldImagery", "OpenStreetMap.DE"))
 ```
 
 
-## 5) What other data sources might we use to understand how reservoirs and 
-natural lakes vary in size in these three states? 
+## 5) What other data sources might we use to understand how reservoirs and natural lakes vary in size in these three states? 
 
-
+We could map the area of the lakes using satellite imagery, which would also allow us to look at changes in area over time. 
